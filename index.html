@@ -161,6 +161,7 @@ select.in{padding-right:30px;background:var(--card) url("data:image/svg+xml,%3Cs
 <input type="file" id="fJson" accept=".json,application/json" hidden>
 <script>
 {
+const APPV='11.25-18:40 · Plex Mono';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -517,7 +518,8 @@ function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.ta
   <div class="blk"><h3>백업</h3><div class="note" style="margin:0 0 10px">동기화를 쓰지 않을 때는 백업 파일로 아이폰 ↔ 아이패드를 옮겨 주세요.<br>마지막 백업: ${s.lastBackup?new Date(s.lastBackup).toLocaleString('ko-KR'):'없음'}</div>
  <div class="acts" style="justify-content:flex-start;margin:0"><button class="btn pri" data-a="backup">백업 저장 (JSON)</button><button class="btn" data-a="restore">백업 불러오기</button></div></div>
  <div class="blk"><h3>데이터</h3><div class="acts" style="justify-content:flex-start;margin:0">${SAMPLE.some(x=>!S.words.some(w=>w.w.toLowerCase()===x[0]))?'<button class="btn" data-a="addsample">예시 단어 넣기 · 품사별</button>':''}${smp?'<button class="btn" data-a="clrsample">예시 단어 지우기</button>':''}<button class="btn danger" data-a="clrall">모든 단어 삭제</button></div>
- <div class="note">${DB.mode==='mem'?'이 화면에서는 저장이 되지 않아요. 닫기 전에 꼭 백업해 주세요.':'저장 위치: 이 기기의 브라우저'}</div></div>`}
+ <div class="note">${DB.mode==='mem'?'이 화면에서는 저장이 되지 않아요. 닫기 전에 꼭 백업해 주세요.':'저장 위치: 이 기기의 브라우저'}</div></div>
+ <div class="note" style="text-align:center;margin-top:18px">앱 버전 ${APPV}</div>`}
 
 /* ---------- export ---------- */
 function buildHTML(list,o){const inc=new Set(o.inc),test=o.test==='on';
