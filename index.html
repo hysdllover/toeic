@@ -230,7 +230,8 @@ function ask(msg,btns){return new Promise(res=>{const d=$('#dlg');d.querySelecto
  d.querySelector('.db').innerHTML=btns.map(([v,l,c])=>`<button class="btn ${c||''}" data-a="dlg" data-v="${esc(v)}">${esc(l)}</button>`).join('');
  d.classList.add('open');ask.res=v=>{d.classList.remove('open');ask.res=null;res(v)}})}
 const openSheet=h=>{$('#panel').innerHTML=h;$('#panel').scrollTop=0;$('#sheet').classList.add('open');document.body.classList.add('lock')};
-const closeSheet=()=>{$('#sheet').classList.remove('open');document.body.classList.remove('lock');E=null};
+let curDetail=null;
+const closeSheet=()=>{$('#sheet').classList.remove('open');document.body.classList.remove('lock');E=null;curDetail=null};
 
 /* ---------- speech ---------- */
 let voices=[];
@@ -257,7 +258,22 @@ const scNames=()=>({'en-US':S.set.scName||'토익발음','en-GB':'토익발음 �
 function runSC(text,lang){const segs=String(text).split('\n').map(clean).filter(Boolean);if(!segs.length)return;const N=scNames();lang=lang||S.set.accent;
  if(lang==='mix'){const ok=Object.keys(N).filter(k=>N[k]);if(!ok.length){toast('단축어 이름을 넣어 주세요');return}lang=ok[Math.random()*ok.length|0]}
  const name=N[lang];if(!name){toast(ACC.find(a=>a[0]===lang)[1]+' 단축어 이름이 비어 있어요');return}
- stopSay();location.href='shortcuts://run-shortcut?name='+encodeURIComponent(name)+'&input=text&text='+encodeURIComponent(segs.join('\n'));if(!S.set.scOk){S.set.scOk=true;save()}}
+ stopSay();const q='name='+encodeURIComponent(name)+'&input=text&text='+encodeURIComponent(segs.join('\n'));
+ if(scBack()==='auto'){try{localStorage.setItem('tv_resume',JSON.stringify(snapshot()))}catch(e){}
+  const back=encodeURIComponent(location.origin+location.pathname+'?r=1');
+  location.href='shortcuts://x-callback-url/run-shortcut?'+q+'&x-success='+back+'&x-cancel='+back+'&x-error='+back}
+ else location.href='shortcuts://run-shortcut?'+q;
+ if(!S.set.scOk){S.set.scOk=true;save()}}
+const standalone=!!(navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches));
+const scBack=()=>S.set.scBack||(standalone?'manual':'auto');
+const snapshot=()=>({t:Date.now(),tab:ui.tab,ui:{q:ui.q,st:ui.st,tag:ui.tag,sort:ui.sort,xm:ui.xm,xq:ui.xq},open:curDetail,y:scrollY,
+ Q:Q?{ids:Q.l.map(w=>w.id),i:Q.i,show:Q.show,ok:Q.ok,ng:Q.ng,ngIds:Q.ngIds}:null});
+function resume(){const p=new URLSearchParams(location.search);if(!p.has('r'))return false;
+ const err=p.get('errorMessage');history.replaceState(null,'',location.pathname);
+ let r=null;try{r=JSON.parse(localStorage.getItem('tv_resume')||'null')}catch(e){}
+ if(r&&Date.now()-r.t<15*60000){Object.assign(ui,r.ui);if(r.Q){const l=r.Q.ids.map(byId).filter(Boolean);if(l.length)Q={...r.Q,l}}
+  setTab(r.tab);if(r.open&&byId(r.open))openDetail(r.open);setTimeout(()=>scrollTo(0,r.y||0),30)}else setTab('words');
+ if(err)toast('단축어 오류: '+err.slice(0,60));return true}
 function say(text,btn,lang){if(!text)return;if(S.set.smode==='sc')return runSC(text,lang);if(!hasTTS){toast('이 기기에서는 발음을 지원하지 않아요');return}
  if(btn&&btn===spkBtn){stopSay();return}
  const busy=(()=>{try{return speechSynthesis.speaking||speechSynthesis.pending}catch(e){return false}})();stopSay();
@@ -326,7 +342,7 @@ function renderList(){const l=filtered();
  :`<div class="empty">${S.words.length?'조건에 맞는 단어가 없어요':'아직 단어가 없어요<br>오른쪽 아래 + 로 첫 단어를 넣어 보세요'}</div>`}
 
 /* ---------- detail ---------- */
-function openDetail(id){const w=byId(id);if(!w)return;const wl=new Map(S.words.map(x=>[x.w.toLowerCase(),x.id]));
+function openDetail(id){const w=byId(id);if(!w)return;setTimeout(()=>{curDetail=id},0);const wl=new Map(S.words.map(x=>[x.w.toLowerCase(),x.id]));
  const sec=(t,b)=>b?`<div class="sec"><h4>${t}</h4>${b}</div>`:'';
  openSheet(`<div class="dh"><div><div class="big2">${esc(w.w)}</div><div class="sub">${w.tags.map(t=>`<span class="tg">${esc(t)}</span>`).join('')}</div><button class="lnk" data-a="sayall" data-id="${w.id}">전체 듣기 · 단어→동의어→표현→예문</button></div>${spk(w.w)}</div>
  <div style="margin:14px 0"><div class="seg" id="dst">${[['?','? 아직'],['-','− 외웠어요']].map(([v,l])=>`<button data-a="dst" data-id="${w.id}" data-v="${v}" class="${w.st===v?'on':''}">${l}</button>`).join('')}</div></div>
@@ -416,7 +432,8 @@ function exList(){const o=S.set.ex;return S.words.filter(w=>(o.range==='all'||w.
 function scHtml(s){const N=scNames();return `<div style="height:14px"></div>${seg('set.accent',ACC,s.accent)}
  <label class="lb">국가별 단축어 이름<span>버튼을 누르면 그 단축어로 들어 봐요 · 안 만든 건 비워 두세요</span></label>
  ${ACC.filter(a=>a[0]!=='mix').map(([k,l])=>`<div class="ed"><input class="in" data-scl="${k}" value="${esc(N[k])}" placeholder="(안 씀)" aria-label="${l} 단축어 이름" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn" data-a="sctest" data-v="${k}">${l}</button></div>`).join('')}
- <div class="note">스피커를 누르면 단축어 앱이 열려 읽어 주고, 왼쪽 위 '◀'를 누르면 돌아와요. 이 모드에서는 암기 카드 자동 발음이 꺼져요.</div>
+ <label class="lb">다 읽은 뒤</label>${seg('set.scBack',[['auto','자동으로 돌아오기'],['manual','◀ 로 직접 돌아오기']],scBack())}
+ <div class="note">${scBack()==='auto'?(standalone?'<span style="color:var(--red)">홈 화면 앱에서는 자동 복귀가 Safari로 열려요. 홈 화면 앱으로 쓰면 ◀ 방식을 권해요.</span>':'다 읽으면 Safari의 이 페이지로 바로 돌아오고, 보던 화면(암기 진행·상세 화면)도 그대로 이어져요.'):'다 읽은 뒤 화면 왼쪽 위 ◀ 를 누르면 돌아와요.'} 이 모드에서는 암기 카드 자동 발음이 꺼져요.</div>
  <details class="guide" ${s.scName&&S.set.scOk?'':'open'}><summary>단축어 만드는 법</summary><ol>
  <li>단축어 앱 → 오른쪽 위 <b>+</b> → 맨 위 이름을 <b>${esc(N['en-US']||'토익발음')}</b>으로 바꿔요. (미국 발음용)</li>
  <li><b>텍스트 분할</b> 동작을 추가하고, 텍스트는 <b>단축어 입력</b>, 분할 기준은 <b>새로운 줄</b>로 해요.</li>
@@ -610,7 +627,7 @@ document.addEventListener('keydown',ev=>{if(ui.tab!=='quiz'||!Q||Q.i>=Q.l.length
  const st=await get('state');if(st&&Array.isArray(st.words))S=norm(st);else{seed();put('state',S)}
  for(const k of ['en','ko']){const f=await get('font-'+k);if(f&&f.buf)await applyFont(k,f.buf,f.name)}
  resetSnap();const sc=await get('sync');if(sc)Object.assign(SY,sc);
- applyFz();setTab('words');if(canSync&&SY.token)syncNow()})();
+ applyFz();if(!resume())setTab('words');if(canSync&&SY.token)syncNow()})();
 try{if(window.claude&&window.claude.use)window.claude.use('downloads').then(d=>{DL=d}).catch(()=>{})}catch(e){}
 }
 </script>
