@@ -114,6 +114,14 @@ select.in{padding-right:30px;background:var(--card) url("data:image/svg+xml,%3Cs
 .qbtns .spk{width:auto;height:auto;border:1px solid var(--line)}
 .xr{display:grid;grid-template-columns:minmax(0,1fr) 42px;border-bottom:1px solid var(--line);align-items:center}
 .xt{text-align:left;padding:10px 4px}
+.pp{display:grid;grid-template-columns:minmax(0,1fr);row-gap:2px;padding:2px 0}
+.pp .pa{padding-left:20px}
+.pp .pb{display:grid;grid-template-columns:20px minmax(0,1fr);color:var(--blue)}
+.syr{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.sys{display:flex;flex-wrap:wrap;gap:5px}
+.sy{border:1px solid var(--line);background:var(--card);padding:1px 8px;font-size:calc(13px*var(--z));font-family:'UserEn','UserKo','Courier Prime','IBM Plex Sans KR',monospace}
+@media(min-width:820px){#xlist .pp{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:24px}#xlist .pp .pa{padding-left:0}
+ .syr{grid-template-columns:220px minmax(0,1fr);align-items:start}}
 .src{display:block;font-size:calc(11px*var(--z));color:var(--sub);margin-top:2px}
 .cnt{font-size:calc(12px*var(--z));color:var(--sub);margin:12px 0 2px}
 .blk{border-top:1px solid var(--ink);padding:16px 0 22px}
@@ -265,7 +273,7 @@ function openDetail(id){const w=byId(id);if(!w)return;const wl=new Map(S.words.m
  ${sec('뜻',w.m||w.pos?`<div style="font-size:calc(16px*var(--z))">${w.pos?`<i class="p">${esc(w.pos)}</i>`:''}${esc(w.m)}</div>`:'')}
  ${sec('동의어',w.syn.length?`<div class="chips">${w.syn.map(s=>{const i=wl.get(s.toLowerCase());return i?`<button class="chip link" data-a="open" data-id="${i}">${esc(s)}</button>`:`<button class="chip" data-a="say" data-t="${esc(s)}">${esc(s)}</button>`}).join('')}</div>`:'')}
  ${sec('빈출표현',w.col.map(c=>`<div class="li"><div><span class="e">${esc(c.e)}</span>${c.m?`<span class="mm">${esc(c.m)}</span>`:''}</div>${spk(c.e)}</div>`).join(''))}
- ${sec('패러프레이징',w.para.map(p=>`<div class="li"><div><span class="e">${esc(p.a)}</span>${p.b?`<span class="ar">→</span><span class="e">${esc(p.b)}</span>`:''}</div>${spk(p.b?p.a+'. '+p.b:p.a)}</div>`).join(''))}
+ ${sec('패러프레이징',w.para.map(p=>`<div class="li" style="border-bottom:1px dashed var(--line);padding:6px 0"><div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>${spk(p.b?p.a+'. '+p.b:p.a)}</div>`).join(''))}
  ${sec('예문',w.ex?`<div class="li"><div class="e" style="font-style:italic">${esc(w.ex)}</div>${spk(w.ex)}</div>`:'')}
  ${sec('메모',w.memo?`<div style="white-space:pre-line;font-size:calc(14px*var(--z))">${esc(w.memo)}</div>`:'')}
  <div class="note">틀린 횟수 ${w.ng} · 추가 ${new Date(w.c).toLocaleDateString('ko-KR')}</div>
@@ -320,11 +328,11 @@ function renderCard(){const v=$('#v-quiz');
   <div class="acts" style="justify-content:stretch">${Q.ng?`<button class="btn pri" style="flex:1" data-a="qretry">? 단어만 다시</button>`:''}<button class="btn" style="flex:1" data-a="qquit">설정으로</button></div>`;return}
  const w=Q.l[Q.i],m=qs().mode,pct=Q.i/Q.l.length*100;
  const front=m==='mw'?`<div class="bigk">${w.pos?`<i class="p">${esc(w.pos)}</i>`:''}${esc(w.m)}</div>`:`<div class="big">${esc(w.w)}</div>`;
- const ans=m==='wm'?`${w.pos?`<i class="p">${esc(w.pos)}</i>`:''}${esc(w.m)}`:m==='ws'?esc(w.syn.join(', ')):`<span class="big" style="font-size:calc(32px*var(--z))">${esc(w.w)}</span>`;
+ const ans=m==='wm'?`${w.pos?`<i class="p">${esc(w.pos)}</i>`:''}${esc(w.m)}`:m==='ws'?esc(w.syn.join(' · ')):`<span class="big" style="font-size:calc(32px*var(--z))">${esc(w.w)}</span>`;
  const ln=(b,t)=>t?`<p><b>${b}</b>${t}</p>`:'';
  const back=`<div class="back"><div class="ans">${ans||'—'}</div>
-  ${m!=='wm'&&m!=='mw'?ln('뜻',esc(w.m)):''}${m!=='ws'?ln('=',esc(w.syn.join(', '))):''}
-  ${w.col.map(c=>ln('+',esc(c.e)+(c.m?' · '+esc(c.m):''))).join('')}${w.para.map(p=>ln('→',esc(p.a)+(p.b?' / '+esc(p.b):''))).join('')}${ln('ex',esc(w.ex))}</div>`;
+  ${m!=='wm'&&m!=='mw'?ln('뜻',esc(w.m)):''}${m!=='ws'?ln('=',esc(w.syn.join(' · '))):''}
+  ${w.col.map(c=>ln('+',esc(c.e)+(c.m?' · '+esc(c.m):''))).join('')}${w.para.map(p=>ln('≒',esc(p.a)+(p.b?'<br><b>→</b>'+esc(p.b):''))).join('')}${ln('ex',esc(w.ex))}</div>`;
  v.innerHTML=`<div class="qtop"><span>${Q.i+1} / ${Q.l.length}</span><button class="lnk" data-a="qquit">그만하기</button></div><div class="bar"><i style="width:${pct}%"></i></div>
  <div class="card" data-a="qflip" role="button" aria-label="정답 확인">${front}${Q.show?back:'<div class="hint">탭해서 확인</div>'}</div>
  <div class="qbtns"><button class="btn" data-a="qmark" data-v="?">? 몰라요</button><button class="spk" data-a="say" data-t="${esc(w.w)}" aria-label="발음 듣기">${SPK}</button><button class="btn pri" data-a="qmark" data-v="-">− 외웠어요</button></div>
@@ -336,11 +344,11 @@ function qmark(v){const w=Q.l[Q.i];if(!w)return;w.st=v;if(v==='?'){w.ng++;Q.ng++
 function renderExpr(){$('#v-expr').innerHTML=`${seg('ui.xm',[['para','패러프레이징'],['col','빈출표현'],['syn','동의어']],ui.xm)}
  <input class="in" id="xq" type="search" style="margin-top:10px" placeholder="표현 검색" value="${esc(ui.xq)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><div id="xlist"></div>`;renderX()}
 function renderX(){const q=ui.xq.trim().toLowerCase();let it=[];
- for(const w of S.words){if(ui.xm==='para')w.para.forEach(p=>it.push({k:p.a,h:`<span class="e">${esc(p.a)}</span>${p.b?`<span class="ar">→</span><span class="e">${esc(p.b)}</span>`:''}`,t:p.b?p.a+'. '+p.b:p.a,s:p.a+' '+p.b,w}));
+ for(const w of S.words){if(ui.xm==='para')w.para.forEach(p=>it.push({k:p.a,h:`<div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>`,t:p.b?p.a+'. '+p.b:p.a,s:p.a+' '+p.b,w}));
   else if(ui.xm==='col')w.col.forEach(c=>it.push({k:c.e,h:`<span class="e">${esc(c.e)}</span>${c.m?`<span class="mm">${esc(c.m)}</span>`:''}`,t:c.e,s:c.e+' '+c.m,w}));
-  else if(w.syn.length)it.push({k:w.w,h:`<span class="e">${esc(w.w)}</span><span class="ar">=</span><span class="e">${esc(w.syn.join(', '))}</span>`,t:[w.w,...w.syn].join(', '),s:w.w+' '+w.syn.join(' ')+' '+w.m,w})}
+  else if(w.syn.length)it.push({k:w.w,h:`<div class="syr"><div><span class="e">${esc(w.w)}</span><span class="src">${w.pos?esc(w.pos)+' ':''}${esc(w.m)}</span></div><div class="sys">${w.syn.map(x=>`<span class="sy">${esc(x)}</span>`).join('')}</div></div>`,t:[w.w,...w.syn].join(', '),s:w.w+' '+w.syn.join(' ')+' '+w.m,w})}
  it=it.filter(x=>!q||(x.s+' '+x.w.w).toLowerCase().includes(q)).sort((a,b)=>a.k.localeCompare(b.k));
- $('#xlist').innerHTML=`<div class="cnt">${it.length}개</div>`+(it.length?it.map(x=>`<div class="xr"><button class="xt" data-a="open" data-id="${x.w.id}">${x.h}<span class="src">${esc(x.w.w)}${ui.xm==='syn'&&x.w.m?' · '+(x.w.pos?esc(x.w.pos)+' ':'')+esc(x.w.m):''}</span></button>${spk(x.t)}</div>`).join('')
+ $('#xlist').innerHTML=`<div class="cnt">${it.length}개</div>`+(it.length?it.map(x=>`<div class="xr"><button class="xt" data-a="open" data-id="${x.w.id}">${x.h}${ui.xm==='syn'?'':`<span class="src">${esc(x.w.w)}</span>`}</button>${spk(x.t)}</div>`).join('')
   :`<div class="empty">아직 정리된 표현이 없어요<br>단어를 추가할 때 함께 적어 주세요</div>`)}
 
 /* ---------- settings ---------- */
@@ -379,9 +387,9 @@ function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.ta
 function buildHTML(list,o){const inc=new Set(o.inc),test=o.test==='on';
  const desc=[o.range==='all'?'전체':o.range==='?'?'? 단어':'− 단어',o.tag||'모든 태그',test?'뜻 가리기':''].filter(Boolean).join(' · ');
  const rows=list.map((w,i)=>{const d=[];
-  if(inc.has('syn')&&w.syn.length)d.push(`<p><b>=</b>${esc(w.syn.join(', '))}</p>`);
+  if(inc.has('syn')&&w.syn.length)d.push(`<p><b>=</b>${esc(w.syn.join(' · '))}</p>`);
   if(inc.has('col'))w.col.forEach(c=>d.push(`<p><b>+</b>${esc(c.e)}${c.m&&!test?` <s>${esc(c.m)}</s>`:''}</p>`));
-  if(inc.has('para'))w.para.forEach(p=>d.push(`<p><b>→</b>${esc(p.a)}${p.b?' / '+esc(p.b):''}</p>`));
+  if(inc.has('para'))w.para.forEach(p=>d.push(`<p><b>≒</b>${esc(p.a)}</p>${p.b?`<p class="pb"><b>→</b>${esc(p.b)}</p>`:''}`));
   if(inc.has('ex')&&w.ex)d.push(`<p class="ex">${esc(w.ex)}</p>`);
   return `<tr><td class="no">${i+1}<br><span class="${w.st==='?'?'q':''}">${w.st==='?'?'?':'−'}</span></td><td><div class="w">${esc(w.w)}</div></td><td>${w.pos?`<span class="pos">${esc(w.pos)}</span> `:''}${test?'<div class="blank"></div>':esc(w.m)}</td><td class="d">${d.join('')}</td></tr>`}).join('');
  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TOEIC 단어장 ${ymd('.')}</title>
@@ -400,7 +408,7 @@ td{border-bottom:.4px solid #d6d4ce;padding:5px 4px;vertical-align:top;overflow-
 .w{font:400 11pt/1.2 'Courier Prime',monospace}.pos{font-size:8pt;color:#7b7972;margin-right:3px}
 .blank{border-bottom:.5px dashed #b9b7b0;height:15px}
 .d p{margin:0 0 1px;padding-left:16px;text-indent:-16px}.d b{font-weight:400;color:#4f6b88;display:inline-block;width:16px;text-indent:0}
-.d s{text-decoration:none;color:#7b7972}.ex{color:#55534e;font-style:italic}
+.d s{text-decoration:none;color:#7b7972}.d .pb{margin-bottom:3px}.ex{color:#55534e;font-style:italic}
 </style></head><body><div class="page"><header><h1>TOEIC VOCA</h1><div class="meta">${esc(desc)}<br>${list.length}단어 · ${ymd('.')}</div></header>
 <table><colgroup><col style="width:8mm"><col style="width:36mm"><col style="width:${test?46:42}mm"><col></colgroup>
 <thead><tr><th></th><th>단어</th><th>뜻</th><th>동의어 · 빈출표현 · 패러프레이징</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`}
