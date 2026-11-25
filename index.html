@@ -126,7 +126,7 @@ select.in{padding-right:30px;background:var(--card) url("data:image/svg+xml,%3Cs
 .blk{border-top:1px solid var(--ink);padding:16px 0 22px}
 .blk h3{font-size:calc(15px*var(--z));font-weight:400;margin:0 0 4px}
 .ed{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-bottom:6px}
-.ed .btn{min-height:42px;padding:0 12px;font-size:calc(13px*var(--z))}
+.ed .btn{min-height:42px;padding:0 12px;font-size:calc(13px*var(--z));min-width:76px}
 .rng{display:flex;align-items:center;gap:12px}.rng input{flex:1;accent-color:var(--blue)}
 .fpv{border:1px solid var(--line);background:var(--card);padding:10px 12px;font-size:calc(18px*var(--z))}
 .p{font-style:normal;margin-right:6px;opacity:.75}
@@ -253,12 +253,16 @@ function pickVoice(lang){if(!voices.length)loadVoices();const k=(S.set.vmap||{})
 let spkBtn=null,spkT=null,spkRun=0;
 const clean=t=>String(t).replace(/[~·…]/g,' ').replace(/\s*\/\s*/g,', ').replace(/\s+/g,' ').trim();
 function stopSay(){clearTimeout(spkT);spkRun++;try{speechSynthesis.cancel()}catch(e){}if(spkBtn)spkBtn.classList.remove('on');spkBtn=null}
-function say(text,btn){if(!text)return;if(!hasTTS){toast('이 기기에서는 발음을 지원하지 않아요');return}
+const scNames=()=>({'en-US':S.set.scName||'토익발음','en-GB':'토익발음 영국','en-AU':'토익발음 호주','en-CA':'토익발음 캐나다',...(S.set.scNames||{})});
+function runSC(text,lang){const segs=String(text).split('\n').map(clean).filter(Boolean);if(!segs.length)return;const N=scNames();lang=lang||S.set.accent;
+ if(lang==='mix'){const ok=Object.keys(N).filter(k=>N[k]);if(!ok.length){toast('단축어 이름을 넣어 주세요');return}lang=ok[Math.random()*ok.length|0]}
+ const name=N[lang];if(!name){toast(ACC.find(a=>a[0]===lang)[1]+' 단축어 이름이 비어 있어요');return}
+ stopSay();location.href='shortcuts://run-shortcut?name='+encodeURIComponent(name)+'&input=text&text='+encodeURIComponent(segs.join('\n'));if(!S.set.scOk){S.set.scOk=true;save()}}
+function say(text,btn,lang){if(!text)return;if(S.set.smode==='sc')return runSC(text,lang);if(!hasTTS){toast('이 기기에서는 발음을 지원하지 않아요');return}
  if(btn&&btn===spkBtn){stopSay();return}
  const busy=(()=>{try{return speechSynthesis.speaking||speechSynthesis.pending}catch(e){return false}})();stopSay();
  const segs=String(text).split('\n').map(clean).filter(Boolean);if(!segs.length)return;
- if(S.set.smode==='sc'){stopSay();location.href='shortcuts://run-shortcut?name='+encodeURIComponent(S.set.scName||'토익발음')+'&input=text&text='+encodeURIComponent(segs.join('\n'));if(!S.set.scOk){S.set.scOk=true;save()}return}
- const lang=S.set.accent==='mix'?['en-US','en-GB','en-AU','en-CA'][Math.random()*4|0]:S.set.accent,v=pickVoice(lang),run=spkRun;
+ const ac=lang||S.set.accent;lang=ac==='mix'?['en-US','en-GB','en-AU','en-CA'][Math.random()*4|0]:ac;const v=pickVoice(lang),run=spkRun;
  if(btn){spkBtn=btn;btn.classList.add('on')}
  const done=()=>{if(run!==spkRun)return;if(spkBtn)spkBtn.classList.remove('on');spkBtn=null};
  const play=i=>{if(run!==spkRun)return;if(i>=segs.length)return done();
@@ -409,16 +413,19 @@ function renderX(){const q=ui.xq.trim().toLowerCase();let it=[];
 
 /* ---------- settings ---------- */
 function exList(){const o=S.set.ex;return S.words.filter(w=>(o.range==='all'||w.st===o.range)&&(!o.tag||w.tags.includes(o.tag))).sort((a,b)=>a.w.localeCompare(b.w))}
-function scHtml(s){return `<label class="lb" for="sc-name">단축어 이름</label><div class="ed"><input class="in" id="sc-name" value="${esc(s.scName)}" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn" data-a="vtest">듣기</button></div>
+function scHtml(s){const N=scNames();return `<div style="height:14px"></div>${seg('set.accent',ACC,s.accent)}
+ <label class="lb">국가별 단축어 이름<span>버튼을 누르면 그 단축어로 들어 봐요 · 안 만든 건 비워 두세요</span></label>
+ ${ACC.filter(a=>a[0]!=='mix').map(([k,l])=>`<div class="ed"><input class="in" data-scl="${k}" value="${esc(N[k])}" placeholder="(안 씀)" aria-label="${l} 단축어 이름" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn" data-a="sctest" data-v="${k}">${l}</button></div>`).join('')}
  <div class="note">스피커를 누르면 단축어 앱이 열려 읽어 주고, 왼쪽 위 '◀'를 누르면 돌아와요. 이 모드에서는 암기 카드 자동 발음이 꺼져요.</div>
  <details class="guide" ${s.scName&&S.set.scOk?'':'open'}><summary>단축어 만드는 법</summary><ol>
- <li>단축어 앱 → 오른쪽 위 <b>+</b> → 맨 위 이름을 <b>${esc(s.scName||'토익발음')}</b>으로 바꿔요.</li>
+ <li>단축어 앱 → 오른쪽 위 <b>+</b> → 맨 위 이름을 <b>${esc(N['en-US']||'토익발음')}</b>으로 바꿔요. (미국 발음용)</li>
  <li><b>텍스트 분할</b> 동작을 추가하고, 텍스트는 <b>단축어 입력</b>, 분할 기준은 <b>새로운 줄</b>로 해요.</li>
  <li><b>각각 반복</b>을 추가해요. (분할된 텍스트를 하나씩 읽게 해요)</li>
  <li>반복 안에 <b>텍스트 말하기</b>를 넣고 입력을 <b>반복 항목</b>으로 해요. 화살표(›)를 펼쳐 <b>음성 → Evan</b>, 속도, <b>완료될 때까지 대기</b> 켬.</li>
  <li>반복 안 '텍스트 말하기' 아래에 <b>대기 1초</b>를 넣으면 표현 사이에 쉼이 생겨요. (선택)</li>
  <li>맨 위 '입력' 칸이 '입력 받지 않음'이면 눌러서 <b>텍스트</b>를 받도록 바꿔요.</li>
- <li>여기서 <b>듣기</b>를 눌러 확인해요. 처음 한 번은 실행 허용을 물어볼 수 있어요.</li></ol></details>`}
+ <li>위 <b>미국</b> 버튼을 눌러 확인해요. 처음엔 실행 허용 창이 뜨니 '항상 허용'을 눌러요.</li>
+ <li><b>국가별로 쓰려면:</b> 만든 단축어를 길게 눌러 <b>복제</b> → 이름을 위 칸과 똑같이(예: 토익발음 영국) 바꾸고, '텍스트 말하기'의 <b>언어·음성</b>만 바꿔요. 영국 Daniel·Kate, 호주 Karen·Lee처럼 먼저 아이폰 음성 설정에서 내려받아 두세요. 캐나다 음성이 없으면 칸을 비우거나 미국 음성으로 만들어도 돼요.</li></ol></details>`}
 function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.tag='';
  const mgr=(k,name)=>`${S[k].map(t=>`<div class="ed"><input class="in" data-ren="${k}" data-old="${esc(t)}" value="${esc(t)}" aria-label="${name} 이름"><button class="btn danger" data-a="rm" data-k="${k}" data-v="${esc(t)}">삭제</button></div>`).join('')}
   <div class="ed"><input class="in" id="new-${k}" placeholder="새 ${name}"><button class="btn" data-a="addt" data-k="${k}">추가</button></div>`;
@@ -432,7 +439,7 @@ function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.ta
  <div style="margin-top:14px"><button class="btn pri wide" data-a="syncon">연결하고 동기화</button></div>
  <div class="note">토큰은 이 기기에만 저장돼요. 아이폰과 아이패드에 같은 토큰을 넣으면 같은 Gist(${esc(SY.file)})를 자동으로 찾아 이어 써요.</div>`}</div>
  <div class="blk"><h3>발음</h3><div class="note" style="margin:0 0 10px">토익처럼 미국·영국·호주·캐나다 발음을 골라 들어요. '섞기'는 들을 때마다 무작위예요.</div>
- ${seg('set.smode',[['web','앱 음성'],['sc','단축어 (Evan 등)']],s.smode)}
+ ${seg('set.smode',[['web','앱 음성'],['sc','단축어 (국가별)']],s.smode)}
  ${s.smode==='sc'?scHtml(s):`<div style="height:14px"></div>
  ${seg('set.accent',ACC,s.accent)}
  ${s.accent==='mix'?'':(()=>{const vl=vlist(s.accent,ui.allv),cur=pickVoice(s.accent),k=(s.vmap||{})[s.accent]||'';
@@ -547,6 +554,7 @@ document.addEventListener('click',async ev=>{
   if(SY.st==='err'&&/토큰|권한|Gist를/.test(SY.err)){SY.token='';saveSY();renderSet()}break}
  case 'sync':syncNow(true);break;
  case 'unsync':if(await ask('동기화 연결을 해제할까요?\n이 기기의 토큰만 지워지고 단어는 그대로 있어요.',[['','취소'],['y','해제','danger']])==='y'){clearTimeout(pT);Object.assign(SY,{token:'',st:'',err:''});saveSY();renderAll()}break;
+ case 'sctest':say('This is a TOEIC listening test.\nThe meeting was moved to a later date.',null,v);break;
  case 'allv':ui.allv=!ui.allv;renderSet();break;
  case 'vtest':say('The quarterly meeting has been postponed.\nThe meeting was moved to a later date.',b);break;
  case 'rm':{const k=b.dataset.k;if(await ask(`'${v}'을(를) 삭제할까요?\n단어에서도 빠져요.`,[['','취소'],['y','삭제','danger']])!=='y')break;
@@ -573,7 +581,7 @@ document.addEventListener('input',ev=>{const t=ev.target;
  else if(t.id==='rate'){S.set.rate=+t.value;$('#rateV').textContent=(+t.value).toFixed(2);save()}});
 document.addEventListener('change',async ev=>{const t=ev.target;
  if(t.id==='sort'){ui.sort=t.value;renderList()}
- else if(t.id==='sc-name'){S.set.scName=t.value.trim()||'토익발음';save();renderSet()}
+ else if(t.dataset.scl){S.set.scNames={...scNames(),[t.dataset.scl]:t.value.trim()};save()}
  else if(t.id==='voice'){S.set.vmap={...(S.set.vmap||{}),[S.set.accent]:t.value};save();renderSet();say('Hello. This is a TOEIC listening test.')}
  else if(t.id==='exTag'){S.set.ex.tag=t.value;save();renderSet()}
  else if(t.dataset.ren){const k=t.dataset.ren,old=t.dataset.old,nv=t.value.trim();
