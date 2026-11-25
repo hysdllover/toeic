@@ -130,6 +130,9 @@ select.in{padding-right:30px;background:var(--card) url("data:image/svg+xml,%3Cs
 .rng{display:flex;align-items:center;gap:12px}.rng input{flex:1;accent-color:var(--blue)}
 .fpv{border:1px solid var(--line);background:var(--card);padding:10px 12px;font-size:calc(18px*var(--z))}
 .p{font-style:normal;margin-right:6px;opacity:.75}
+.guide{margin-top:12px;border:1px solid var(--line);background:var(--card);padding:10px 12px;font-size:calc(13px*var(--z))}
+.guide summary{cursor:pointer;color:var(--blue)}
+.guide ol{margin:10px 0 2px;padding-left:20px}.guide li{margin:6px 0}.guide b{font-weight:400;color:var(--blue)}
 .mono{font-family:ui-monospace,Menlo,monospace;font-size:calc(12px*var(--z))}
 .toast{position:fixed;left:50%;bottom:calc(140px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:calc(13px*var(--z));padding:9px 16px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:40;white-space:nowrap}
 .toast.on{opacity:1}
@@ -166,7 +169,7 @@ const ACC=[['en-US','미국'],['en-GB','영국'],['en-AU','호주'],['en-CA','�
 const DEF=()=>({words:[],del:{},mt:0,tags:['LC','Part 5','Part 6','Part 7','토스'],pos:['n.','v.','adj.','adv.','prep.','conj.','phr.'],
  set:{accent:'en-US',voice:'',rate:0.9,lastBackup:null,
   qs:{range:'?',mode:'wm',n:'20',order:'rand',tags:[],auto:'off'},
-  ex:{range:'all',tag:'',test:'off',inc:['syn','col','para','ex']},fz:1,vmap:{},gap:600}});
+  ex:{range:'all',tag:'',test:'off',inc:['syn','col','para','ex']},fz:1,vmap:{},gap:600,smode:'web',scName:'토익발음',scOk:false}});
 let S=DEF(),ui={tab:'words',q:'',st:'all',tag:'',sort:'new',xm:'para',xq:''},Q=null,E=null,DL=null,fk='en';const fontName={en:'',ko:''};
 
 /* ---------- storage ---------- */
@@ -254,6 +257,7 @@ function say(text,btn){if(!text)return;if(!hasTTS){toast('이 기기에서는 �
  if(btn&&btn===spkBtn){stopSay();return}
  const busy=(()=>{try{return speechSynthesis.speaking||speechSynthesis.pending}catch(e){return false}})();stopSay();
  const segs=String(text).split('\n').map(clean).filter(Boolean);if(!segs.length)return;
+ if(S.set.smode==='sc'){stopSay();location.href='shortcuts://run-shortcut?name='+encodeURIComponent(S.set.scName||'토익발음')+'&input=text&text='+encodeURIComponent(segs.join('\n'));if(!S.set.scOk){S.set.scOk=true;save()}return}
  const lang=S.set.accent==='mix'?['en-US','en-GB','en-AU','en-CA'][Math.random()*4|0]:S.set.accent,v=pickVoice(lang),run=spkRun;
  if(btn){spkBtn=btn;btn.classList.add('on')}
  const done=()=>{if(run!==spkRun)return;if(spkBtn)spkBtn.classList.remove('on');spkBtn=null};
@@ -266,22 +270,20 @@ function say(text,btn){if(!text)return;if(!hasTTS){toast('이 기기에서는 �
 
 /* ---------- sync (GitHub) ---------- */
 const canSync=/github\.io$/.test(location.hostname)||location.protocol==='file:'||/^(localhost|127\.)/.test(location.hostname);
-const SY={token:'',repo:'hysdllover/toeic',path:'voca-data.json',branch:'data',last:0,sha:null,busy:false,again:false,err:'',st:''};
-const saveSY=()=>put('sync',{token:SY.token,repo:SY.repo,path:SY.path,branch:SY.branch,last:SY.last});
+const SY={token:'',gist:'',file:'toeic-voca.json',last:0,busy:false,again:false,err:'',st:''};
+const saveSY=()=>put('sync',{token:SY.token,gist:SY.gist,file:SY.file,last:SY.last});
 let pT;function schedPush(){if(!canSync||!SY.token)return;clearTimeout(pT);pT=setTimeout(()=>syncNow(),4000)}
-const enc=t=>{const b=new TextEncoder().encode(t);let r='';for(let i=0;i<b.length;i+=0x8000)r+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(r)};
-const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b),c=>c.charCodeAt(0)));
-const ePath=()=>SY.path.split('/').map(encodeURIComponent).join('/');
 const gh=(m,u,body)=>fetch('https://api.github.com'+u,{method:m,cache:'no-store',headers:{Authorization:'Bearer '+SY.token,Accept:'application/vnd.github+json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
-function ghErr(r){const e=new Error(r.status===401?'토큰이 올바르지 않거나 만료됐어요':r.status===403?'토큰 권한이 부족해요 (Contents 읽기·쓰기 필요)':r.status===404?'저장소를 찾을 수 없어요':'GitHub 오류 '+r.status);e.status=r.status;return e}
-async function ensureBranch(){const r=await gh('GET',`/repos/${SY.repo}/branches/${SY.branch}`);if(r.ok)return;if(r.status!==404)throw ghErr(r);
- const rr=await gh('GET',`/repos/${SY.repo}`);if(!rr.ok)throw ghErr(rr);const def=(await rr.json()).default_branch;
- const rf=await gh('GET',`/repos/${SY.repo}/git/ref/heads/${def}`);if(!rf.ok)throw ghErr(rf);
- const rc=await gh('POST',`/repos/${SY.repo}/git/refs`,{ref:'refs/heads/'+SY.branch,sha:(await rf.json()).object.sha});if(!rc.ok&&rc.status!==422)throw ghErr(rc)}
-async function pull(){const r=await gh('GET',`/repos/${SY.repo}/contents/${ePath()}?ref=${SY.branch}&t=${Date.now()}`);
- if(r.status===404){await ensureBranch();SY.sha=null;return null}if(!r.ok)throw ghErr(r);
- const j=await r.json();let b=j.content;if(!b){const rb=await gh('GET',`/repos/${SY.repo}/git/blobs/${j.sha}`);if(!rb.ok)throw ghErr(rb);b=(await rb.json()).content}
- SY.sha=j.sha;return JSON.parse(dec(b.replace(/\s/g,'')))}
+function ghErr(r){const e=new Error(r.status===401?'토큰이 올바르지 않거나 만료됐어요':r.status===403?'토큰에 Gist 권한이 없어요':r.status===404?'Gist를 찾을 수 없어요':'GitHub 오류 '+r.status);e.status=r.status;return e}
+async function findGist(){for(let p=1;p<=5;p++){const r=await gh('GET',`/gists?per_page=100&page=${p}&t=${Date.now()}`);if(!r.ok)throw ghErr(r);
+ const l=await r.json();const g=l.find(x=>x.files&&x.files[SY.file]);if(g)return g.id;if(l.length<100)break}return ''}
+async function pull(){if(!SY.gist){SY.gist=await findGist();if(!SY.gist)return null;saveSY()}
+ const r=await gh('GET',`/gists/${SY.gist}?t=${Date.now()}`);if(r.status===404){SY.gist='';saveSY()}if(!r.ok)throw ghErr(r);
+ const f=((await r.json()).files||{})[SY.file];if(!f)return null;
+ const txt=f.truncated?await (await fetch(f.raw_url,{cache:'no-store'})).text():f.content;return txt?JSON.parse(txt):null}
+async function push(txt){const files={[SY.file]:{content:txt}};
+ const r=SY.gist?await gh('PATCH',`/gists/${SY.gist}`,{files}):await gh('POST','/gists',{description:'TOEIC voca 단어장 데이터 (앱 자동 동기화)',public:false,files});
+ if(!r.ok)throw ghErr(r);if(!SY.gist){SY.gist=(await r.json()).id;saveSY()}}
 const canon=x=>({app:'toeic-voca',v:2,words:[...x.words].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),del:Object.fromEntries(Object.keys(x.del||{}).sort().map(k=>[k,x.del[k]])),tags:x.tags,pos:x.pos,mt:x.mt||0});
 function merge(R){const del={...R.del};for(const [k,v] of Object.entries(S.del))del[k]=Math.max(del[k]||0,v);
  const m=new Map();for(const w of [...S.words,...R.words]){const x=m.get(w.id);if(!x||(w.u||0)>(x.u||0))m.set(w.id,w)}
@@ -291,12 +293,10 @@ function merge(R){const del={...R.del};for(const [k,v] of Object.entries(S.del))
  return {words,del,tags:useR?R.tags:S.tags,pos:useR?R.pos:S.pos,mt:Math.max(R.mt||0,S.mt||0)}}
 async function syncNow(manual){if(!canSync||!SY.token)return;if(SY.busy){SY.again=true;return}
  clearTimeout(pT);stamp();SY.busy=true;SY.st='sync';renderTop();
- try{for(let t=0;t<3;t++){const raw=await pull();const before=JSON.stringify(canon(S));let rtxt=null;
-   if(raw){const Rn=norm({...raw,set:S.set});rtxt=JSON.stringify(canon(Rn));Object.assign(S,merge(Rn));resetSnap()}
-   const after=JSON.stringify(canon(S));if(after!==before){put('state',S);renderAll()}
-   if(after===rtxt)break;
-   const r=await gh('PUT',`/repos/${SY.repo}/contents/${ePath()}`,{message:'voca sync '+new Date().toISOString(),content:enc(after),branch:SY.branch,...(SY.sha?{sha:SY.sha}:{})});
-   if(r.status===409||r.status===422){if(t===2)throw ghErr(r);continue}if(!r.ok)throw ghErr(r);SY.sha=(await r.json()).content.sha;break}
+ try{const raw=await pull();const before=JSON.stringify(canon(S));let rtxt=null;
+  if(raw){const Rn=norm({...raw,set:S.set});rtxt=JSON.stringify(canon(Rn));Object.assign(S,merge(Rn));resetSnap()}
+  const after=JSON.stringify(canon(S));if(after!==before){put('state',S);renderAll()}
+  if(after!==rtxt)await push(after);
   SY.last=Date.now();SY.err='';SY.st='ok';saveSY();if(manual)toast('동기화했어요')}
  catch(e){SY.err=e&&e.message||'네트워크 오류';SY.st='err';if(manual)toast(SY.err)}
  finally{SY.busy=false;renderTop();if(ui.tab==='set')renderSet();if(SY.again){SY.again=false;setTimeout(()=>syncNow(),500)}}}
@@ -378,7 +378,7 @@ function renderQuiz(){if(Q)return renderCard();const o=qs();o.tags=o.tags.filter
 function startQuiz(ids){const o=qs();let l=ids?shuffle(ids.map(byId).filter(Boolean)):pool();
  if(!ids){l=o.order==='rand'?shuffle(l):o.order==='wrong'?l.sort((a,b)=>b.ng-a.ng):l.sort((a,b)=>b.c-a.c);if(o.n!=='all')l=l.slice(0,+o.n)}
  if(!l.length)return;Q={l,i:0,show:false,ok:0,ng:0,ngIds:[]};renderCard();autoSay()}
-function autoSay(){if(!Q||qs().auto!=='on'||Q.i>=Q.l.length)return;const w=Q.l[Q.i];if(qs().mode!=='mw'||Q.show)say(w.w)}
+function autoSay(){if(S.set.smode==='sc'||!Q||qs().auto!=='on'||Q.i>=Q.l.length)return;const w=Q.l[Q.i];if(qs().mode!=='mw'||Q.show)say(w.w)}
 function renderCard(){const v=$('#v-quiz');
  if(Q.i>=Q.l.length){v.innerHTML=`<div class="card" style="cursor:default"><div class="big">− ${Q.ok} · ? ${Q.ng}</div><div class="hint">결과가 단어 목록에 반영됐어요</div></div>
   <div class="acts" style="justify-content:stretch">${Q.ng?`<button class="btn pri" style="flex:1" data-a="qretry">? 단어만 다시</button>`:''}<button class="btn" style="flex:1" data-a="qquit">설정으로</button></div>`;return}
@@ -409,20 +409,31 @@ function renderX(){const q=ui.xq.trim().toLowerCase();let it=[];
 
 /* ---------- settings ---------- */
 function exList(){const o=S.set.ex;return S.words.filter(w=>(o.range==='all'||w.st===o.range)&&(!o.tag||w.tags.includes(o.tag))).sort((a,b)=>a.w.localeCompare(b.w))}
+function scHtml(s){return `<label class="lb" for="sc-name">단축어 이름</label><div class="ed"><input class="in" id="sc-name" value="${esc(s.scName)}" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn" data-a="vtest">듣기</button></div>
+ <div class="note">스피커를 누르면 단축어 앱이 열려 읽어 주고, 왼쪽 위 '◀'를 누르면 돌아와요. 이 모드에서는 암기 카드 자동 발음이 꺼져요.</div>
+ <details class="guide" ${s.scName&&S.set.scOk?'':'open'}><summary>단축어 만드는 법</summary><ol>
+ <li>단축어 앱 → 오른쪽 위 <b>+</b> → 맨 위 이름을 <b>${esc(s.scName||'토익발음')}</b>으로 바꿔요.</li>
+ <li><b>텍스트 분할</b> 동작을 추가하고, 텍스트는 <b>단축어 입력</b>, 분할 기준은 <b>새로운 줄</b>로 해요.</li>
+ <li><b>각각 반복</b>을 추가해요. (분할된 텍스트를 하나씩 읽게 해요)</li>
+ <li>반복 안에 <b>텍스트 말하기</b>를 넣고 입력을 <b>반복 항목</b>으로 해요. 화살표(›)를 펼쳐 <b>음성 → Evan</b>, 속도, <b>완료될 때까지 대기</b> 켬.</li>
+ <li>반복 안 '텍스트 말하기' 아래에 <b>대기 1초</b>를 넣으면 표현 사이에 쉼이 생겨요. (선택)</li>
+ <li>맨 위 '입력' 칸이 '입력 받지 않음'이면 눌러서 <b>텍스트</b>를 받도록 바꿔요.</li>
+ <li>여기서 <b>듣기</b>를 눌러 확인해요. 처음 한 번은 실행 허용을 물어볼 수 있어요.</li></ol></details>`}
 function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.tag='';
  const mgr=(k,name)=>`${S[k].map(t=>`<div class="ed"><input class="in" data-ren="${k}" data-old="${esc(t)}" value="${esc(t)}" aria-label="${name} 이름"><button class="btn danger" data-a="rm" data-k="${k}" data-v="${esc(t)}">삭제</button></div>`).join('')}
   <div class="ed"><input class="in" id="new-${k}" placeholder="새 ${name}"><button class="btn" data-a="addt" data-k="${k}">추가</button></div>`;
  const n=exList().length,smp=S.words.some(w=>w.sample);
- $('#v-set').innerHTML=`<div class="blk" style="border-top:0;padding-top:0"><h3>동기화 · GitHub 토큰</h3>${!canSync?'<div class="note" style="margin:0">동기화는 GitHub 주소(hysdllover.github.io/toeic)에서 열었을 때만 돼요.</div>':SY.token?`
- <div class="note" style="margin:0 0 10px">연결됨 · ${esc(SY.repo)} · ${esc(SY.branch)} 브랜치 / ${esc(SY.path)}<br>${SY.st==='err'?'<span style="color:var(--red)">오류: '+esc(SY.err)+'</span>':SY.st==='sync'?'동기화 중…':SY.last?'마지막 동기화 '+new Date(SY.last).toLocaleString('ko-KR'):'아직 동기화 전'}</div>
+ $('#v-set').innerHTML=`<div class="blk" style="border-top:0;padding-top:0"><h3>동기화 · GitHub Gist</h3>${!canSync?'<div class="note" style="margin:0">동기화는 GitHub 주소(hysdllover.github.io/toeic)에서 열었을 때만 돼요.</div>':SY.token?`
+ <div class="note" style="margin:0 0 10px">연결됨 · 비공개 Gist ${SY.gist?esc(SY.gist.slice(0,8))+'…':'(첫 동기화 때 만들어요)'}<br>${SY.st==='err'?'<span style="color:var(--red)">오류: '+esc(SY.err)+'</span>':SY.st==='sync'?'동기화 중…':SY.last?'마지막 동기화 '+new Date(SY.last).toLocaleString('ko-KR'):'아직 동기화 전'}</div>
  <div class="acts" style="justify-content:flex-start;margin:0"><button class="btn pri" data-a="sync">지금 동기화</button><button class="btn danger" data-a="unsync">연결 해제</button></div>
  <div class="note">단어를 바꾸면 몇 초 뒤 자동으로 올리고, 앱을 열 때마다 받아와요.</div>`:`
- <label class="lb" for="sy-t">토큰</label><input class="in" id="sy-t" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
- <label class="lb" for="sy-r">저장소</label><input class="in" id="sy-r" value="${esc(SY.repo)}" autocapitalize="off" autocorrect="off" spellcheck="false">
- <label class="lb" for="sy-p">파일</label><input class="in" id="sy-p" value="${esc(SY.path)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+ <label class="lb" for="sy-t">토큰<span>gist 권한</span></label><input class="in" id="sy-t" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_… 또는 github_pat_…">
+ <label class="lb" for="sy-g">Gist ID<span>비워 두면 자동으로 찾거나 새로 만들어요</span></label><input class="in" id="sy-g" value="${esc(SY.gist)}" autocapitalize="off" autocorrect="off" spellcheck="false">
  <div style="margin-top:14px"><button class="btn pri wide" data-a="syncon">연결하고 동기화</button></div>
- <div class="note">토큰은 이 기기에만 저장되고 저장소에는 올라가지 않아요. 아이폰과 아이패드에 각각 한 번씩 넣어 주세요. 단어 데이터는 저장소의 data 브랜치에 저장돼요.</div>`}</div>
+ <div class="note">토큰은 이 기기에만 저장돼요. 아이폰과 아이패드에 같은 토큰을 넣으면 같은 Gist(${esc(SY.file)})를 자동으로 찾아 이어 써요.</div>`}</div>
  <div class="blk"><h3>발음</h3><div class="note" style="margin:0 0 10px">토익처럼 미국·영국·호주·캐나다 발음을 골라 들어요. '섞기'는 들을 때마다 무작위예요.</div>
+ ${seg('set.smode',[['web','앱 음성'],['sc','단축어 (Evan 등)']],s.smode)}
+ ${s.smode==='sc'?scHtml(s):`<div style="height:14px"></div>
  ${seg('set.accent',ACC,s.accent)}
  ${s.accent==='mix'?'':(()=>{const vl=vlist(s.accent,ui.allv),cur=pickVoice(s.accent),k=(s.vmap||{})[s.accent]||'';
   return `<label class="lb" for="voice">음성<span>${cur?'사용 중 · '+esc(cur.name):'이 기기에 해당 음성 없음'}</span></label>
@@ -430,7 +441,7 @@ function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.ta
   <div class="note">${s.accent==='en-CA'&&!vlist('en-CA').length?'캐나다 음성이 기기에 없어 미국 음성으로 들려줘요 (발음이 거의 같아요). ':''}${voices.length?`<button class="lnk" data-a="allv">${ui.allv?'자연스러운 음성만 보기':'효과음·옛 음성까지 모두 보기'}</button>`:'음성 목록을 불러오는 중이에요'} · <button class="lnk" data-a="vreload">목록 새로고침</button></div>`})()}
  <label class="lb" for="rate">속도</label><div class="rng"><input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="${s.rate}"><span id="rateV">${(+s.rate).toFixed(2)}</span><button class="btn" data-a="vtest">듣기</button></div>
  <label class="lb" for="gap">표현 사이 쉼<span>패러프레이징·전체 듣기</span></label><div class="rng"><input type="range" id="gap" min="200" max="1500" step="100" value="${s.gap}"><span id="gapV">${(s.gap/1000).toFixed(1)}초</span></div>
- <div class="note">${hasTTS?'소리가 안 나면 무음 모드를 꺼 주세요. 더 자연스러운 음성은 기기 설정 → 손쉬운 사용에서 영어 \'향상된\'·\'프리미엄\' 음성을 내려받으면 자동으로 골라 써요.':'이 기기는 음성 재생을 지원하지 않아요.'}</div></div>
+ <div class="note">${hasTTS?'소리가 안 나면 무음 모드를 꺼 주세요. 더 자연스러운 음성은 기기 설정 → 손쉬운 사용에서 영어 \'향상된\'·\'프리미엄\' 음성을 내려받으면 자동으로 골라 써요.':'이 기기는 음성 재생을 지원하지 않아요.'}</div>`}</div>
  <div class="blk"><h3>태그</h3><div class="note" style="margin:0 0 10px">이름을 바꾸면 단어에도 바로 반영돼요</div>${mgr('tags','태그')}</div>
  <div class="blk"><h3>품사</h3>${mgr('pos','품사')}</div>
  <div class="blk"><h3>폰트</h3>
@@ -530,12 +541,12 @@ document.addEventListener('click',async ev=>{
  case 'qquit':Q=null;renderQuiz();break;
  case 'qretry':startQuiz(Q.ngIds);break;
  case 'vreload':{loadVoices();renderSet();const n=voices.filter(v=>/^en/i.test(vlang(v))&&!isBad(v)).length;toast(`영어 음성 ${n}개를 찾았어요`);break}
- case 'syncon':{const t=$('#sy-t').value.trim(),r=$('#sy-r').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\.git$|\/$/g,''),p=$('#sy-p').value.trim().replace(/^\//,'')||'voca-data.json';
-  if(!t){toast('토큰을 넣어 주세요');break}if(!/^[\w.-]+\/[\w.-]+$/.test(r)){toast('저장소는 아이디/이름 형식이에요');break}
-  Object.assign(SY,{token:t,repo:r,path:p,sha:null,last:0,err:'',st:''});await saveSY();renderSet();await syncNow(true);
-  if(SY.st==='err'&&(SY.err.includes('토큰')||SY.err.includes('저장소'))){SY.token='';saveSY();renderSet()}break}
+ case 'syncon':{const t=$('#sy-t').value.trim(),g=$('#sy-g').value.trim().replace(/^https?:\/\/gist\.github\.com\/([^/]+\/)?/,'').replace(/[/#?].*$/,'');
+  if(!t){toast('토큰을 넣어 주세요');break}
+  Object.assign(SY,{token:t,gist:g,last:0,err:'',st:''});await saveSY();renderSet();await syncNow(true);
+  if(SY.st==='err'&&/토큰|권한|Gist를/.test(SY.err)){SY.token='';saveSY();renderSet()}break}
  case 'sync':syncNow(true);break;
- case 'unsync':if(await ask('동기화 연결을 해제할까요?\n이 기기의 토큰만 지워지고 단어는 그대로 있어요.',[['','취소'],['y','해제','danger']])==='y'){clearTimeout(pT);Object.assign(SY,{token:'',sha:null,st:'',err:''});saveSY();renderAll()}break;
+ case 'unsync':if(await ask('동기화 연결을 해제할까요?\n이 기기의 토큰만 지워지고 단어는 그대로 있어요.',[['','취소'],['y','해제','danger']])==='y'){clearTimeout(pT);Object.assign(SY,{token:'',st:'',err:''});saveSY();renderAll()}break;
  case 'allv':ui.allv=!ui.allv;renderSet();break;
  case 'vtest':say('The quarterly meeting has been postponed.\nThe meeting was moved to a later date.',b);break;
  case 'rm':{const k=b.dataset.k;if(await ask(`'${v}'을(를) 삭제할까요?\n단어에서도 빠져요.`,[['','취소'],['y','삭제','danger']])!=='y')break;
@@ -562,6 +573,7 @@ document.addEventListener('input',ev=>{const t=ev.target;
  else if(t.id==='rate'){S.set.rate=+t.value;$('#rateV').textContent=(+t.value).toFixed(2);save()}});
 document.addEventListener('change',async ev=>{const t=ev.target;
  if(t.id==='sort'){ui.sort=t.value;renderList()}
+ else if(t.id==='sc-name'){S.set.scName=t.value.trim()||'토익발음';save();renderSet()}
  else if(t.id==='voice'){S.set.vmap={...(S.set.vmap||{}),[S.set.accent]:t.value};save();renderSet();say('Hello. This is a TOEIC listening test.')}
  else if(t.id==='exTag'){S.set.ex.tag=t.value;save();renderSet()}
  else if(t.dataset.ren){const k=t.dataset.ren,old=t.dataset.old,nv=t.value.trim();
