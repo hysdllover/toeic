@@ -75,7 +75,8 @@ select.in{padding-right:30px;background:var(--card) url("data:image/svg+xml,%3Cs
 .w em{font-style:normal;font-size:calc(11px*var(--z));color:var(--sub);border:1px solid var(--line);padding:0 4px;margin-left:6px;vertical-align:2px}
 .m{display:block;font-size:calc(13px*var(--z));color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .spk{width:40px;height:40px;display:grid;place-items:center;color:var(--sub)}
-.spk:active{color:var(--blue)}
+.spk:active,.spk.on{color:var(--blue)}
+.lnk.on{color:var(--blue)}
 .empty{padding:48px 8px;text-align:center;color:var(--sub);font-size:calc(14px*var(--z));grid-column:1/-1}
 .sheet,.dlg{position:fixed;inset:0;z-index:20;background:rgba(20,20,20,.3);display:none;align-items:flex-end;justify-content:center}
 .dlg{z-index:30;align-items:center;padding:20px}
@@ -165,7 +166,7 @@ const ACC=[['en-US','미국'],['en-GB','영국'],['en-AU','호주'],['en-CA','�
 const DEF=()=>({words:[],del:{},mt:0,tags:['LC','Part 5','Part 6','Part 7','토스'],pos:['n.','v.','adj.','adv.','prep.','conj.','phr.'],
  set:{accent:'en-US',voice:'',rate:0.9,lastBackup:null,
   qs:{range:'?',mode:'wm',n:'20',order:'rand',tags:[],auto:'off'},
-  ex:{range:'all',tag:'',test:'off',inc:['syn','col','para','ex']},fz:1,vmap:{}}});
+  ex:{range:'all',tag:'',test:'off',inc:['syn','col','para','ex']},fz:1,vmap:{},gap:600}});
 let S=DEF(),ui={tab:'words',q:'',st:'all',tag:'',sort:'new',xm:'para',xq:''},Q=null,E=null,DL=null,fk='en';const fontName={en:'',ko:''};
 
 /* ---------- storage ---------- */
@@ -246,11 +247,22 @@ const vlist=(lang,all)=>voices.filter(v=>vlang(v).toLowerCase().startsWith(lang.
 function pickVoice(lang){if(!voices.length)loadVoices();const k=(S.set.vmap||{})[lang];
  if(k){const f=voices.find(v=>vkey(v)===k);if(f)return f}
  return vlist(lang)[0]||(lang==='en-CA'?vlist('en-US')[0]:null)||null}
-function say(text){if(!text)return;if(!hasTTS){toast('이 기기에서는 발음을 지원하지 않아요');return}
- try{const lang=S.set.accent==='mix'?['en-US','en-GB','en-AU','en-CA'][Math.random()*4|0]:S.set.accent;
-  const u=new SpeechSynthesisUtterance(text);const v=pickVoice(lang);if(v){u.voice=v;u.lang=vlang(v)}else u.lang=lang;u.rate=+S.set.rate||0.9;
-  const ss=speechSynthesis;if(ss.speaking||ss.pending){ss.cancel();setTimeout(()=>ss.speak(u),80)}else ss.speak(u);
-  if(S.set.accent==='mix')toast(ACC.find(a=>a[0]===lang)[1]+' 발음'+(v?' · '+v.name.replace(/\s*\(.*\)/,''):''))}catch(e){toast('발음을 재생하지 못했어요')}}
+let spkBtn=null,spkT=null,spkRun=0;
+const clean=t=>String(t).replace(/[~·…]/g,' ').replace(/\s*\/\s*/g,', ').replace(/\s+/g,' ').trim();
+function stopSay(){clearTimeout(spkT);spkRun++;try{speechSynthesis.cancel()}catch(e){}if(spkBtn)spkBtn.classList.remove('on');spkBtn=null}
+function say(text,btn){if(!text)return;if(!hasTTS){toast('이 기기에서는 발음을 지원하지 않아요');return}
+ if(btn&&btn===spkBtn){stopSay();return}
+ const busy=(()=>{try{return speechSynthesis.speaking||speechSynthesis.pending}catch(e){return false}})();stopSay();
+ const segs=String(text).split('\n').map(clean).filter(Boolean);if(!segs.length)return;
+ const lang=S.set.accent==='mix'?['en-US','en-GB','en-AU','en-CA'][Math.random()*4|0]:S.set.accent,v=pickVoice(lang),run=spkRun;
+ if(btn){spkBtn=btn;btn.classList.add('on')}
+ const done=()=>{if(run!==spkRun)return;if(spkBtn)spkBtn.classList.remove('on');spkBtn=null};
+ const play=i=>{if(run!==spkRun)return;if(i>=segs.length)return done();
+  try{const u=new SpeechSynthesisUtterance(segs[i]);if(v){u.voice=v;u.lang=vlang(v)}else u.lang=lang;u.rate=+S.set.rate||0.9;
+   u.onend=()=>{if(run!==spkRun)return;spkT=setTimeout(()=>play(i+1),i+1<segs.length?+S.set.gap||600:0)};u.onerror=e=>{if(e&&e.error==='interrupted')return;done()};
+   speechSynthesis.speak(u)}catch(e){done();toast('발음을 재생하지 못했어요')}};
+ if(busy)spkT=setTimeout(()=>play(0),80);else play(0);
+ if(S.set.accent==='mix')toast(ACC.find(a=>a[0]===lang)[1]+' 발음'+(v?' · '+v.name.replace(/\s*\(.*\)/,''):''))}
 
 /* ---------- sync (GitHub) ---------- */
 const canSync=/github\.io$/.test(location.hostname)||location.protocol==='file:'||/^(localhost|127\.)/.test(location.hostname);
@@ -312,12 +324,12 @@ function renderList(){const l=filtered();
 /* ---------- detail ---------- */
 function openDetail(id){const w=byId(id);if(!w)return;const wl=new Map(S.words.map(x=>[x.w.toLowerCase(),x.id]));
  const sec=(t,b)=>b?`<div class="sec"><h4>${t}</h4>${b}</div>`:'';
- openSheet(`<div class="dh"><div><div class="big2">${esc(w.w)}</div><div class="sub">${w.tags.map(t=>`<span class="tg">${esc(t)}</span>`).join('')}</div></div>${spk(w.w)}</div>
+ openSheet(`<div class="dh"><div><div class="big2">${esc(w.w)}</div><div class="sub">${w.tags.map(t=>`<span class="tg">${esc(t)}</span>`).join('')}</div><button class="lnk" data-a="sayall" data-id="${w.id}">전체 듣기 · 단어→동의어→표현→예문</button></div>${spk(w.w)}</div>
  <div style="margin:14px 0"><div class="seg" id="dst">${[['?','? 아직'],['-','− 외웠어요']].map(([v,l])=>`<button data-a="dst" data-id="${w.id}" data-v="${v}" class="${w.st===v?'on':''}">${l}</button>`).join('')}</div></div>
  ${sec('뜻',w.m||w.pos?`<div style="font-size:calc(16px*var(--z))">${w.pos?`<i class="p">${esc(w.pos)}</i>`:''}${esc(w.m)}</div>`:'')}
  ${sec('동의어',w.syn.length?`<div class="chips">${w.syn.map(s=>{const i=wl.get(s.toLowerCase());return i?`<button class="chip link" data-a="open" data-id="${i}">${esc(s)}</button>`:`<button class="chip" data-a="say" data-t="${esc(s)}">${esc(s)}</button>`}).join('')}</div>`:'')}
  ${sec('빈출표현',w.col.map(c=>`<div class="li"><div><span class="e">${esc(c.e)}</span>${c.m?`<span class="mm">${esc(c.m)}</span>`:''}</div>${spk(c.e)}</div>`).join(''))}
- ${sec('패러프레이징',w.para.map(p=>`<div class="li" style="border-bottom:1px dashed var(--line);padding:6px 0"><div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>${spk(p.b?p.a+'. '+p.b:p.a)}</div>`).join(''))}
+ ${sec('패러프레이징',w.para.map(p=>`<div class="li" style="border-bottom:1px dashed var(--line);padding:6px 0"><div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>${spk(p.b?p.a+'\n'+p.b:p.a)}</div>`).join(''))}
  ${sec('예문',w.ex?`<div class="li"><div class="e" style="font-style:italic">${esc(w.ex)}</div>${spk(w.ex)}</div>`:'')}
  ${sec('메모',w.memo?`<div style="white-space:pre-line;font-size:calc(14px*var(--z))">${esc(w.memo)}</div>`:'')}
  <div class="note">틀린 횟수 ${w.ng} · 추가 ${new Date(w.c).toLocaleDateString('ko-KR')}</div>
@@ -388,7 +400,7 @@ function qmark(v){const w=Q.l[Q.i];if(!w)return;w.st=v;if(v==='?'){w.ng++;Q.ng++
 function renderExpr(){$('#v-expr').innerHTML=`${seg('ui.xm',[['para','패러프레이징'],['col','빈출표현'],['syn','동의어']],ui.xm)}
  <input class="in" id="xq" type="search" style="margin-top:10px" placeholder="표현 검색" value="${esc(ui.xq)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><div id="xlist"></div>`;renderX()}
 function renderX(){const q=ui.xq.trim().toLowerCase();let it=[];
- for(const w of S.words){if(ui.xm==='para')w.para.forEach(p=>it.push({k:p.a,h:`<div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>`,t:p.b?p.a+'. '+p.b:p.a,s:p.a+' '+p.b,w}));
+ for(const w of S.words){if(ui.xm==='para')w.para.forEach(p=>it.push({k:p.a,h:`<div class="pp"><div class="pa e">${esc(p.a)}</div>${p.b?`<div class="pb e"><span>→</span><span>${esc(p.b)}</span></div>`:''}</div>`,t:p.b?p.a+'\n'+p.b:p.a,s:p.a+' '+p.b,w}));
   else if(ui.xm==='col')w.col.forEach(c=>it.push({k:c.e,h:`<span class="e">${esc(c.e)}</span>${c.m?`<span class="mm">${esc(c.m)}</span>`:''}`,t:c.e,s:c.e+' '+c.m,w}));
   else if(w.syn.length)it.push({k:w.w,h:`<div class="syr"><div><span class="e">${esc(w.w)}</span><span class="mm">${w.pos?esc(w.pos)+' ':''}${esc(w.m)}</span></div><div class="sys">${w.syn.map(x=>`<span class="sy">${esc(x)}</span>`).join('')}</div></div>`,t:[w.w,...w.syn].join(', '),s:w.w+' '+w.syn.join(' ')+' '+w.m,w})}
  it=it.filter(x=>!q||(x.s+' '+x.w.w).toLowerCase().includes(q)).sort((a,b)=>a.k.localeCompare(b.k));
@@ -417,6 +429,7 @@ function renderSet(){const s=S.set,o=s.ex;if(o.tag&&!S.tags.includes(o.tag))o.ta
   <select class="in" id="voice"><option value="">자동 (가장 자연스러운 음성)</option>${vl.map(v=>`<option value="${esc(vkey(v))}" ${k===vkey(v)?'selected':''}>${esc(v.name)} · ${esc(vlang(v))}</option>`).join('')}</select>
   <div class="note">${s.accent==='en-CA'&&!vlist('en-CA').length?'캐나다 음성이 기기에 없어 미국 음성으로 들려줘요 (발음이 거의 같아요). ':''}${voices.length?`<button class="lnk" data-a="allv">${ui.allv?'자연스러운 음성만 보기':'효과음·옛 음성까지 모두 보기'}</button>`:'음성 목록을 불러오는 중이에요'} · <button class="lnk" data-a="vreload">목록 새로고침</button></div>`})()}
  <label class="lb" for="rate">속도</label><div class="rng"><input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="${s.rate}"><span id="rateV">${(+s.rate).toFixed(2)}</span><button class="btn" data-a="vtest">듣기</button></div>
+ <label class="lb" for="gap">표현 사이 쉼<span>패러프레이징·전체 듣기</span></label><div class="rng"><input type="range" id="gap" min="200" max="1500" step="100" value="${s.gap}"><span id="gapV">${(s.gap/1000).toFixed(1)}초</span></div>
  <div class="note">${hasTTS?'소리가 안 나면 무음 모드를 꺼 주세요. 더 자연스러운 음성은 기기 설정 → 손쉬운 사용에서 영어 \'향상된\'·\'프리미엄\' 음성을 내려받으면 자동으로 골라 써요.':'이 기기는 음성 재생을 지원하지 않아요.'}</div></div>
  <div class="blk"><h3>태그</h3><div class="note" style="margin:0 0 10px">이름을 바꾸면 단어에도 바로 반영돼요</div>${mgr('tags','태그')}</div>
  <div class="blk"><h3>품사</h3>${mgr('pos','품사')}</div>
@@ -497,7 +510,8 @@ document.addEventListener('click',async ev=>{
  case 'ftag':ui.tag=v;renderWords();break;
  case 'mk':{const w=byId(id);w.st=w.st==='?'?'-':'?';save();renderTop();renderList();break}
  case 'open':openDetail(id);break;
- case 'say':say(b.dataset.t);break;
+ case 'say':say(b.dataset.t,b);break;
+ case 'sayall':{const w=byId(id);if(w)say([w.w,...w.syn,...w.col.map(c=>c.e),...w.para.flatMap(p=>[p.a,p.b]),w.ex].filter(Boolean).join('\n'),b);break}
  case 'add':openEdit(null);break;
  case 'edit':openEdit(id);break;
  case 'close':closeSheet();break;
@@ -523,7 +537,7 @@ document.addEventListener('click',async ev=>{
  case 'sync':syncNow(true);break;
  case 'unsync':if(await ask('동기화 연결을 해제할까요?\n이 기기의 토큰만 지워지고 단어는 그대로 있어요.',[['','취소'],['y','해제','danger']])==='y'){clearTimeout(pT);Object.assign(SY,{token:'',sha:null,st:'',err:''});saveSY();renderAll()}break;
  case 'allv':ui.allv=!ui.allv;renderSet();break;
- case 'vtest':say('The quarterly meeting has been postponed until further notice.');break;
+ case 'vtest':say('The quarterly meeting has been postponed.\nThe meeting was moved to a later date.',b);break;
  case 'rm':{const k=b.dataset.k;if(await ask(`'${v}'을(를) 삭제할까요?\n단어에서도 빠져요.`,[['','취소'],['y','삭제','danger']])!=='y')break;
   S[k]=S[k].filter(t=>t!==v);S.words.forEach(w=>{if(k==='tags')w.tags=w.tags.filter(t=>t!==v);else if(w.pos===v)w.pos=''});save();renderSet();break}
  case 'addt':{const k=b.dataset.k,i=$('#new-'+k),t=i.value.trim();if(!t)break;if(S[k].includes(t)){toast('이미 있어요');break}S[k].push(t);save();renderSet();break}
@@ -544,6 +558,7 @@ document.addEventListener('click',async ev=>{
 document.addEventListener('input',ev=>{const t=ev.target;
  if(t.id==='q'){ui.q=t.value;renderList()}else if(t.id==='xq'){ui.xq=t.value;renderX()}
  else if(t.id==='e-w')dupCheck();else if(t.id==='fz'){S.set.fz=+t.value;$('#fzV').textContent=Math.round(t.value*100)+'%';applyFz();save()}
+ else if(t.id==='gap'){S.set.gap=+t.value;$('#gapV').textContent=(t.value/1000).toFixed(1)+'초';save()}
  else if(t.id==='rate'){S.set.rate=+t.value;$('#rateV').textContent=(+t.value).toFixed(2);save()}});
 document.addEventListener('change',async ev=>{const t=ev.target;
  if(t.id==='sort'){ui.sort=t.value;renderList()}
