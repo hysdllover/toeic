@@ -166,7 +166,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const SPK='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 const ACC=[['en-US','미국'],['en-GB','영국'],['en-AU','호주'],['en-CA','캐나다'],['mix','섞기']];
-const DEF=()=>({words:[],del:{},mt:0,smt:0,fonts:{en:null,ko:null},fontGist:'',tags:['LC','Part 5','Part 6','Part 7','토스'],pos:['n.','v.','adj.','adv.','prep.','conj.','phr.'],
+const DEF=()=>({words:[],del:{},mt:0,lt:{tags:{},pos:{}},ld:{tags:{},pos:{}},smt:0,fonts:{en:null,ko:null},fontGist:'',tags:['LC','Part 5','Part 6','Part 7','토스'],pos:['n.','v.','adj.','adv.','prep.','conj.','phr.'],
  set:{accent:'en-US',voice:'',rate:0.9,lastBackup:null,
   qs:{range:'?',mode:'wm',n:'20',order:'rand',tags:[],auto:'off'},
   ex:{range:'all',tag:'',test:'off',inc:['syn','col','para','ex']},fz:1,vmap:{},gap:600,smode:'web',scName:'토익발음',scOk:false}});
@@ -179,20 +179,21 @@ const get=k=>new Promise(res=>{if(DB.mode==='idb'){try{const q=DB.db.transaction
  if(DB.mode==='ls'){try{const v=localStorage.getItem('tv_'+k);res(v?JSON.parse(v):undefined)}catch(e){res()}return}res()});
 const put=(k,v)=>new Promise(res=>{if(DB.mode==='idb'){try{const t=DB.db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>res(false)}catch(e){res(false)}return}
  if(DB.mode==='ls'){try{localStorage.setItem('tv_'+k,JSON.stringify(v));res(true)}catch(e){res(false)}return}res(false)});
-let sT,snap=new Map(),snapT=null,snapS=null;
+let sT,snap=new Map(),snapT=null,snapS=null,snapL=null;
 const SETK=['accent','rate','gap','qs','ex','fz','smode','scName','scNames'];
 const pickSet=o=>Object.fromEntries(SETK.filter(k=>o&&o[k]!==undefined).map(k=>[k,o[k]]));
 const whash=w=>{const {u,...r}=w;return JSON.stringify(r)};
-function resetSnap(){snap=new Map(S.words.map(w=>[w.id,whash(w)]));snapT=JSON.stringify([S.tags,S.pos]);snapS=JSON.stringify(pickSet(S.set))}
+function resetSnap(){snap=new Map(S.words.map(w=>[w.id,whash(w)]));snapT=JSON.stringify([S.tags,S.pos]);snapL={tags:[...S.tags],pos:[...S.pos]};snapS=JSON.stringify(pickSet(S.set))}
 function stamp(){const now=Date.now(),seen=new Set();
  for(const w of S.words){const h=whash(w);if(snap.get(w.id)!==h){if(snap.has(w.id)||!w.u)w.u=now;snap.set(w.id,h)}seen.add(w.id)}
  for(const id of [...snap.keys()])if(!seen.has(id)){S.del[id]=now;snap.delete(id)}
- const th=JSON.stringify([S.tags,S.pos]);if(th!==snapT){if(snapT!==null)S.mt=now;snapT=th}
+ const th=JSON.stringify([S.tags,S.pos]);if(th!==snapT){if(snapT!==null){S.mt=now;for(const k of ['tags','pos']){const a=new Set(snapL[k]),b=new Set(S[k]);
+  for(const n of b)if(!a.has(n))S.lt[k][n]=now;for(const n of a)if(!b.has(n))S.ld[k][n]=now}}snapT=th;snapL={tags:[...S.tags],pos:[...S.pos]}}
  const sh=JSON.stringify(pickSet(S.set));if(sh!==snapS){if(snapS!==null)S.smt=now;snapS=sh}}
 const save=()=>{stamp();clearTimeout(sT);sT=setTimeout(()=>put('state',S),200);schedPush()};
 
 function norm(st){const d=DEF();const s={...d,...st,set:{...d.set,...(st.set||{})}};
- if(!s.del||typeof s.del!=='object')s.del={};s.mt=+s.mt||0;s.smt=+s.smt||0;s.fonts={en:null,ko:null,...(s.fonts||{})};s.fontGist=s.fontGist||'';
+ if(!s.del||typeof s.del!=='object')s.del={};s.mt=+s.mt||0;s.smt=+s.smt||0;s.fonts={en:null,ko:null,...(s.fonts||{})};s.fontGist=s.fontGist||'';for(const k of ['lt','ld']){const o=s[k]&&typeof s[k]==='object'?s[k]:{};s[k]={tags:{...(o.tags||{})},pos:{...(o.pos||{})}}}
  s.set.qs={...d.set.qs,...((st.set||{}).qs||{})};s.set.ex={...d.set.ex,...((st.set||{}).ex||{})};
  s.words=(st.words||[]).filter(w=>w&&w.w).map(w=>({id:w.id||uid(),w:String(w.w),pos:w.pos||'',m:w.m||'',syn:Array.isArray(w.syn)?w.syn:[],col:Array.isArray(w.col)?w.col:[],para:Array.isArray(w.para)?w.para:[],ex:w.ex||'',memo:w.memo||'',tags:Array.isArray(w.tags)?w.tags:[],st:w.st==='-'?'-':'?',ng:+w.ng||0,c:w.c||Date.now(),u:w.u||w.c||Date.now(),sample:!!w.sample}));
  if(!Array.isArray(s.tags))s.tags=d.tags;if(!Array.isArray(s.pos))s.pos=d.pos;return s}
@@ -314,7 +315,7 @@ async function pull(){if(!consDone)await consolidate();if(!SY.gist){SY.gist=awai
 async function push(txt){const files={[SY.file]:{content:txt}};
  const r=SY.gist?await gh('PATCH',`/gists/${SY.gist}`,{files}):await gh('POST','/gists',{description:'TOEIC voca 단어장 데이터 (앱 자동 동기화)',public:false,files});
  if(!r.ok)throw ghErr(r);if(!SY.gist){SY.gist=(await r.json()).id;saveSY()}}
-const canon=x=>({app:'toeic-voca',v:2,words:[...x.words].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),del:Object.fromEntries(Object.keys(x.del||{}).sort().map(k=>[k,x.del[k]])),tags:x.tags,pos:x.pos,mt:x.mt||0,set:pickSet(x.set),smt:x.smt||0,fonts:x.fonts||{en:null,ko:null},fontGist:x.fontGist||''});
+const canon=x=>({app:'toeic-voca',v:2,words:[...x.words].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),del:Object.fromEntries(Object.keys(x.del||{}).sort().map(k=>[k,x.del[k]])),tags:x.tags,pos:x.pos,mt:x.mt||0,lt:x.lt,ld:x.ld,set:pickSet(x.set),smt:x.smt||0,fonts:x.fonts||{en:null,ko:null},fontGist:x.fontGist||''});
 function merge(R){const del={...R.del};for(const [k,v] of Object.entries(S.del))del[k]=Math.max(del[k]||0,v);
  const m=new Map();for(const w of [...S.words,...R.words]){const x=m.get(w.id);if(!x||(w.u||0)>(x.u||0))m.set(w.id,w)}
  const alive=w=>!(del[w.id]&&del[w.id]>=(w.u||0));let words=[...m.values()].filter(alive);
@@ -322,7 +323,10 @@ function merge(R){const del={...R.del};for(const [k,v] of Object.entries(S.del))
  words=words.filter(alive);const useR=(R.mt||0)>(S.mt||0);
  const fonts={};for(const k of ['en','ko']){const a=S.fonts[k],b=R.fonts&&R.fonts[k];fonts[k]=!a?b||null:!b?a:(b.ts||0)>(a.ts||0)?b:a}
  const useS=(R.smt||0)>(S.smt||0);
- return {words,del,tags:useR?R.tags:S.tags,pos:useR?R.pos:S.pos,mt:Math.max(R.mt||0,S.mt||0),
+ const lt={},ld={},L={};for(const k of ['tags','pos']){lt[k]={...(R.lt||{})[k]};ld[k]={...(R.ld||{})[k]};
+  for(const [n,v] of Object.entries(S.lt[k]||{}))lt[k][n]=Math.max(lt[k][n]||0,v);for(const [n,v] of Object.entries(S.ld[k]||{}))ld[k][n]=Math.max(ld[k][n]||0,v);
+  L[k]=[...new Set([...(R[k]||[]),...S[k]])].filter(n=>!((ld[k][n]||0)>(lt[k][n]||0)))}
+ return {words,del,tags:L.tags,pos:L.pos,lt,ld,mt:Math.max(R.mt||0,S.mt||0),
   set:useS?{...S.set,...pickSet(R.set)}:S.set,smt:Math.max(R.smt||0,S.smt||0),fonts,fontGist:R.fontGist||S.fontGist||''}}
 const rnorm=raw=>norm({...raw,set:{...S.set,...pickSet(raw.set||{})}});
 const localFH={en:'',ko:''};
